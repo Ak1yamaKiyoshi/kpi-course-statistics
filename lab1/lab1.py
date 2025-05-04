@@ -20,41 +20,22 @@ INTERVAL_BEGIN = "Початок інтервалу"
 x = A  
 
 
-def pretty_print_table(data, title=None, precision=4, column_widths=None, show_totals=True):
-    """
-    Pretty prints a table with customizable formatting.
-    
-    Args:
-        data: Can be either:
-            - Dictionary containing columns as lists of equal length
-            - List of dictionaries, where each dictionary represents a row
-        title: Optional title for the table
-        precision: Number of decimal places for floating point values
-        column_widths: Dictionary mapping column names to widths
-        show_totals: Whether to show a totals row at the bottom
-    """
-    # Check if data is a list of dictionaries (row-oriented format)
+# DISPLAY
+def pretty_print_table(data, title=None, precision=4, column_widths=None, ):
     if isinstance(data, list) and all(isinstance(item, dict) for item in data):
-        # Convert to column-oriented format
         if not data:  # Empty list
             print("No data to display")
-            return
-            
-        # Get all unique keys from all dictionaries
+            return    
         columns = set()
         for item in data:
             columns.update(item.keys())
         columns = sorted(columns)
-        
-        # Create column-oriented data
         column_data = {col: [] for col in columns}
         for row in data:
             for col in columns:
                 column_data[col].append(row.get(col, ""))
-        
         data = column_data
-    
-    # Extract column names and data
+
     columns = list(data.keys())
     if not columns:  # No columns
         print("No data to display")
@@ -62,66 +43,33 @@ def pretty_print_table(data, title=None, precision=4, column_widths=None, show_t
         
     num_rows = len(data[columns[0]])
     
-    # Set default column widths if not provided
     if column_widths is None:
         column_widths = {}
         for col in columns:
-            # Find max length of values in this column
             max_len = max(len(str(data[col][i])) for i in range(num_rows))
-            # Also consider column name length
             max_len = max(max_len, len(str(col)))
-            # Add padding
             column_widths[col] = max_len + 4
-    
-    # Print title if provided
+
     if title:
         print(title)
         print('=' * sum(column_widths.values()))
-    
-    # Print header
+
     for col in columns:
         print(f"{col:{column_widths[col]}}", end="")
     print()
-    
-    # Print separator
     print('-' * sum(column_widths.values()))
-    
-    # Print rows
+
     for i in range(num_rows):
         for col in columns:
             value = data[col][i]
-            # Format floats with specified precision
             if isinstance(value, float):
                 formatted_value = f"{value:.{precision}f}"
             else:
                 formatted_value = str(value)
             print(f"{formatted_value:{column_widths[col]}}", end="")
         print()
-    
-    # Print totals if requested
-    if show_totals:
-        print('-' * sum(column_widths.values()))
-        print(f"{'Total':{column_widths[columns[0]]}}", end="")
-        
-        for col in columns[1:]:
-            try:
-                # Calculate total for numeric columns
-                values = [x for x in data[col] if isinstance(x, (int, float))]
-                if values:  # Only calculate total if there are numeric values
-                    total = sum(values)
-                    if isinstance(total, float):
-                        formatted_total = f"{total:.{precision}f}"
-                    else:
-                        formatted_total = str(total)
-                    print(f"{formatted_total:{column_widths[col]}}", end="")
-                else:
-                    print(f"{'':{column_widths[col]}}", end="")
-            except:
-                # Skip columns that can't be summed
-                print(f"{'':{column_widths[col]}}", end="")
-        print()
 
-
+#  UTILS 
 def count_a_in_x(a, x):
     count = 0
     for i in x:
@@ -155,9 +103,10 @@ def get_by_idx(x:list, idx:list):
     return filtered_by_idx
 
 
+def get_range(x):
+    return max(x) - min(x)
 
-def mode_interval(x):
-    n = len(x)
+def mode_interval(interval_width, interval_row_data):
     maximum_abs_freq, submaximum_abs_freq = None, None
     begin_of_mode_interval, begin_of_mode_submaxinterval = None, None
     maximum_abs_freq_idx = None
@@ -170,15 +119,6 @@ def mode_interval(x):
             maximum_abs_freq_idx = i
 
 
-
-    n = len(x)
-    xmax, xmin = max(x), min(x)
-
-    interval_bins = (5 * log(n)) # k 
-    range_ = (xmax - xmin)
-    interval_width = range_ / interval_bins
-
-
     interval_mode = \
         begin_of_mode_submaxinterval + \
             (maximum_abs_freq - interval_row_data[maximum_abs_freq_idx - 1][ABS_INTERVAL_FREQUENCY]) /\
@@ -186,11 +126,7 @@ def mode_interval(x):
                 * interval_width
     return interval_mode
 
-
-def median_interval(x): 
-    n = len(x)    
-    interval_row_data = get_interval_row_data(x) 
-
+def median_interval(n, interval_row_data, interval_width): 
     relative_event_chances_for_each_variant = []
     cumsum_abs_interval_frequency = 0
     for interval in interval_row_data:
@@ -212,35 +148,9 @@ def median_interval(x):
         elif submaximum is None or abs(0.5 - chance) < abs(0.5 - submaximum):
             submaximum = chance
 
-
-    n = len(x)
-    xmax, xmin = max(x), min(x)
-
-    interval_bins = (5 * log(n)) # k 
-    range_ = (xmax - xmin)
-    interval_width = range_ / interval_bins
-
     interval_median = submaximum_variant +  ((0.5 - submaximum) / (maximum - submaximum)) * interval_width
     return interval_median
 
-def get_range(x):
-    return max(x) - min(x)
-
-def calculate_mode(data):
-    counts = {}
-    for value in data:
-        if value in counts:
-            counts[value] += 1
-        else:
-            counts[value] = 1
-    
-    max_frequency = max(counts.values())
-    if max_frequency == 1:
-        return None
-
-    modes = [key for key, value in counts.items() if value == max_frequency]
-    
-    return modes
 
 def get_discrete_row_data(x):
     variants = list(set(x))
@@ -251,9 +161,9 @@ def get_discrete_row_data(x):
         VARIANTS: variants,
         ABS_FREQUENCY: abs_frequencies,
         REL_FREQUENCY: rel_frequencies
-    }
+    }, n
 
-def get_interval_row_data(x):
+def get_interval_row_data(x, discrete_row_data):
     n = len(x)
     xmax, xmin = max(x), min(x)
     
@@ -262,8 +172,7 @@ def get_interval_row_data(x):
     interval_width = range_ / interval_bins
     
     ranges = []
-    
-    discrete_row_data = get_discrete_row_data(x)
+
     current = xmin
     while current < xmax - interval_width:
         current += interval_width
@@ -288,18 +197,18 @@ def get_interval_row_data(x):
             ABS_INTERVAL_FREQUENCY: abs_interval_sum,
         })
         
-    return ranges
+    return ranges, interval_width, n
 
 
-discrete_row_data = get_discrete_row_data(x)
-interval_row_data = get_interval_row_data(x) 
+discrete_row_data, n = get_discrete_row_data(x)
+interval_row_data, interval_width, n = get_interval_row_data(x, discrete_row_data) 
 
-pretty_print_table(discrete_row_data, title="Дискретний та варіаційний ряди", show_totals=False)
-pretty_print_table(interval_row_data, title="Інтервальний ряд", show_totals=False)
+pretty_print_table(discrete_row_data, title="Дискретний та варіаційний ряди", )
+pretty_print_table(interval_row_data, title="Інтервальний ряд", )
 
 # Me
 discrete_median = median(discrete_row_data[VARIANTS])
-interval_median = median_interval(x)
+interval_median = median_interval(n, interval_row_data, interval_width)
 
 # R
 discrete_range = get_range(discrete_row_data[VARIANTS]) 
@@ -307,9 +216,7 @@ interval_range = get_range([interval_row_data[0][INTERVAL_BEGIN], interval_row_d
 
 # Mo 
 discrete_mode = mode(x)
-interval_mode = mode_interval(x)
-
-
+interval_mode = mode_interval(interval_width, interval_row_data)
 
 print(f"""
 Медіана
@@ -362,7 +269,6 @@ for freq, var in zip(discrete_row_data[ABS_FREQUENCY], discrete_row_data[VARIANT
 selected_average = selected_sum / n
 
 
-
 sum_for_dispertion = 0
 for freq, var in zip(discrete_row_data[ABS_FREQUENCY], discrete_row_data[VARIANTS]):
     sum_for_dispertion += var ** 2 * freq
@@ -377,6 +283,6 @@ print(f"""
     Середнє вибіркове: {selected_average:3.1f}
     Дисперсія: {dispertion:3.1f}
     Середнє квадратичне відхилення: {mean_std:3.1f}
-    Коофіцієнт варіації: {variation_coefficient:3.1f}
+    Коофіцієнт варіації: {variation_coefficient:3.1f} % 
 """)
 
