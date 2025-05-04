@@ -17,6 +17,9 @@ REL_FREQUENCY = "Відносна частота"
 DENSITY = "Щільність"
 INTERVAL_END = "Кінець інтервалу"
 INTERVAL_BEGIN = "Початок інтервалу"
+MEAN = "Середнє"
+DISPERSION = "Дисперсія"
+STD = "Середнє відхилення"
 x = A  
 
 
@@ -200,89 +203,356 @@ def get_interval_row_data(x, discrete_row_data):
     return ranges, interval_width, n
 
 
-discrete_row_data, n = get_discrete_row_data(x)
-interval_row_data, interval_width, n = get_interval_row_data(x, discrete_row_data) 
+def calculate_mean_std(dataset):
+    discrete_row_data, n = get_discrete_row_data(dataset)
+    
+    selected_sum = 0
+    for freq, var in zip(discrete_row_data[ABS_FREQUENCY], discrete_row_data[VARIANTS]):
+        selected_sum += freq * var
+    selected_average = selected_sum / n
+    
+    sum_for_dispertion = 0
+    for freq, var in zip(discrete_row_data[ABS_FREQUENCY], discrete_row_data[VARIANTS]):
+        sum_for_dispertion += var ** 2 * freq
+    
+    dispertion = sum_for_dispertion / n - selected_average ** 2
+    mean_std = sqrt(dispertion)
+    
+    return {
+        MEAN: selected_average,
+        DISPERSION: dispertion,
+        STD: mean_std
+    }
 
-pretty_print_table(discrete_row_data, title="Дискретний та варіаційний ряди", )
-pretty_print_table(interval_row_data, title="Інтервальний ряд", )
-
-# Me
-discrete_median = median(discrete_row_data[VARIANTS])
-interval_median = median_interval(n, interval_row_data, interval_width)
-
-# R
-discrete_range = get_range(discrete_row_data[VARIANTS]) 
-interval_range = get_range([interval_row_data[0][INTERVAL_BEGIN], interval_row_data[-1][INTERVAL_END]])
-
-# Mo 
-discrete_mode = mode(x)
-interval_mode = mode_interval(interval_width, interval_row_data)
-
-print(f"""
-Медіана
-    Дискретний  : {discrete_median:3.1f}
-    Інтервальний: {interval_median:3.1f}
-Розмах
-    Дискретний  : {discrete_range:3.1f}
-    Інтервальний: {interval_range:3.1f}
-Мода 
-    Дискретний  : {discrete_mode:3.1f}
-    Інтервальний: {interval_mode:3.1f}
-""")
+############## HTML 
 
 
+def generate_html_report(x, dataset_name):
+    discrete_row_data, n = get_discrete_row_data(x)
+    interval_row_data, interval_width, n = get_interval_row_data(x, discrete_row_data)
+    
+    discrete_median = median(discrete_row_data[VARIANTS])
+    interval_median = median_interval(n, interval_row_data, interval_width)
+    
+    discrete_range = get_range(discrete_row_data[VARIANTS])
+    interval_range = get_range([interval_row_data[0][INTERVAL_BEGIN], interval_row_data[-1][INTERVAL_END]])
+    
+    discrete_mode = mode(x)
+    interval_mode = mode_interval(interval_width, interval_row_data)
+    
+    stats = calculate_mean_std(x)
+    
+    densities = []
+    midpoints = []
+    widths = []
 
+    for interval in interval_row_data: 
+        begin = interval[INTERVAL_BEGIN]
+        end = interval[INTERVAL_END]
+        density = interval[DENSITY]
 
-densities = []
-midpoints = []
-widths = []
+        widths.append(end - begin)
+        midpoints.append((begin + end) / 2)
+        densities.append(density)
 
-for interval in interval_row_data: 
-    begin = interval[INTERVAL_BEGIN]
-    end = interval[INTERVAL_END]
-    density = interval[DENSITY]
+    plt.figure(figsize=(12, 6))
+    plt.bar(midpoints, densities, width=widths, align='center', edgecolor='black', color='orange', label='Гістограма щільності')
+    plt.plot(midpoints, densities, color='red', marker='o', linewidth=2, label='Полігон частот')
 
-    widths.append(end - begin)
-    midpoints.append((begin + end) / 2)
-    densities.append(density)
+    plt.xlabel('Інтервали')
+    plt.ylabel('Щільність')
+    plt.title(f'Гістограма та полігон щільності - {dataset_name}')
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.legend()
+    plt.tight_layout()
+    
+    image_filename = f'lab1_analysis_{dataset_name}.png'
+    plt.savefig(image_filename)
+    plt.close()
+    
+    # Create HTML
+    html = f"""<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Статистичний аналіз - {dataset_name}</title>
+    <style>
+        body {{
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+        }}
+        h1, h2, h3 {{
+            color: #2c3e50;
+        }}
+        table {{
+            border-collapse: collapse;
+            width: 100%;
+            margin-bottom: 30px;
+        }}
+        th, td {{
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }}
+        th {{
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }}
+        tr:nth-child(even) {{
+            background-color: #f9f9f9;
+        }}
+        .section {{
+            margin-bottom: 40px;
+        }}
+    </style>
+</head>
+<body>
+    <h1>Статистичний аналіз даних - {dataset_name}</h1>
+    
+    <div class="section">
+        <h2>Дискретний та варіаційний ряди</h2>
+        <table>
+            <tr>"""
+    
+    for col in discrete_row_data.keys():
+        html += f"<th>{col}</th>"
+    html += """
+            </tr>"""
+    
+    for i in range(len(discrete_row_data[VARIANTS])):
+        html += "<tr>"
+        for col in discrete_row_data.keys():
+            value = discrete_row_data[col][i]
+            if isinstance(value, float):
+                formatted_value = f"{value:.4f}"
+            else:
+                formatted_value = str(value)
+            html += f"<td>{formatted_value}</td>"
+        html += "</tr>"
+    
+    html += """
+        </table>
+    </div>
+    
+    <div class="section">
+        <h2>Інтервальний ряд</h2>
+        <table>
+            <tr>"""
+    
+    if interval_row_data:
+        for col in interval_row_data[0].keys():
+            html += f"<th>{col}</th>"
+    
+    html += """
+            </tr>"""
+    
+    for interval in interval_row_data:
+        html += "<tr>"
+        for col in interval.keys():
+            value = interval[col]
+            if isinstance(value, float):
+                formatted_value = f"{value:.4f}"
+            else:
+                formatted_value = str(value)
+            html += f"<td>{formatted_value}</td>"
+        html += "</tr>"
+    
+    html += f"""
+        </table>
+    </div>
+    
+    <div class="section">
+        <h2>Статистичні характеристики</h2>
+        <table>
+            <tr>
+                <th>Характеристика</th>
+                <th>Дискретний</th>
+                <th>Інтервальний</th>
+            </tr>
+            <tr>
+                <td>Медіана</td>
+                <td>{discrete_median:.2f}</td>
+                <td>{interval_median:.2f}</td>
+            </tr>
+            <tr>
+                <td>Розмах</td>
+                <td>{discrete_range:.2f}</td>
+                <td>{interval_range:.2f}</td>
+            </tr>
+            <tr>
+                <td>Мода</td>
+                <td>{discrete_mode:.2f}</td>
+                <td>{interval_mode:.2f}</td>
+            </tr>
+        </table>
+    </div>
+    
+    <div class="section">
+        <h2>Додаткові статистичні показники</h2>
+        <table>
+            <tr>
+                <th>Показник</th>
+                <th>Значення</th>
+            </tr>
+            <tr>
+                <td>Середнє вибіркове</td>
+                <td>{stats[MEAN]:.2f}</td>
+            </tr>
+            <tr>
+                <td>Дисперсія</td>
+                <td>{stats[DISPERSION]:.2f}</td>
+            </tr>
+            <tr>
+                <td>Середнє квадратичне відхилення</td>
+                <td>{stats[STD]:.2f}</td>
+            </tr>
+            <tr>
+                <td>Коофіцієнт варіації</td>
+                <td>{stats[STD] / stats[MEAN] * 100:.2f} %</td>
+            </tr>
+        </table>
+    </div>
+    
+    <div class="section">
+        <h2>Гістограма та полігон щільності</h2>
+        <img src="{image_filename}" alt="Гістограма та полігон щільності" style="max-width:100%;">
+    </div>
+</body>
+</html>"""
+    
+    html_filename = f"report_{dataset_name}.html"
+    with open(html_filename, "w", encoding="utf-8") as file:
+        file.write(html)
+    
+    return html_filename
 
+def generate_all_reports():
+    report_files = []
+    report_files.append(generate_html_report(A, "A"))
+    report_files.append(generate_html_report(B, "B"))
+    report_files.append(generate_html_report(C, "C"))
+    report_files.append(generate_html_report(D, "D"))
+    report_files.append(generate_html_report(E, "E"))
+    
+    # Generate index page with links to all reports
+    index_html = """<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Статистичний аналіз - Звіти</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+        }
+        .report-list {
+            margin: 30px 0;
+        }
+        .report-item {
+            margin: 15px 0;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-left: 4px solid #4CAF50;
+        }
+        .report-link {
+            font-size: 18px;
+            color: #3498db;
+            text-decoration: none;
+        }
+        .report-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <h1>Статистичний аналіз - Звіти</h1>
+    
+    <div class="report-list">"""
+    
+    for i, file in enumerate(report_files):
+        dataset_name = file.split("_")[1].split(".")[0]
+        index_html += f"""
+        <div class="report-item">
+            <a class="report-link" href="{file}">Звіт для набору даних {dataset_name}</a>
+        </div>"""
+    
+    index_html += """
+    </div>
+</body>
+</html>"""
+    
+    # Save index HTML to file
+    with open("index.html", "w", encoding="utf-8") as file:
+        file.write(index_html)
+    
+    print("Усі звіти успішно згенеровано:")
+    for file in report_files:
+        print(f"  - {file}")
+    print("  - index.html (головна сторінка)")
 
-plt.figure(figsize=(12, 6))
-plt.bar(midpoints, densities, width=widths, align='center', edgecolor='black', color='orange', label='Гістограма щільності')
-plt.plot(midpoints, densities, color='red', marker='o', linewidth=2, label='Полігон частот')
+generate_all_reports()
 
-plt.xlabel('Інтервали')
-plt.ylabel('Щільність')
-plt.title('Гістограма та полігон щільності')
-plt.grid(True, linestyle='--', alpha=0.7)
-plt.legend()
-plt.tight_layout()
-plt.savefig('lab1_analysis.png')
-print("saved to.. 'lab1_analysis.png'")
+def plot_mean_std_comparison_scatter():
+    # Calculate statistics for each dataset
+    stats_A = calculate_mean_std(A)
+    stats_B = calculate_mean_std(B)
+    stats_C = calculate_mean_std(C)
+    stats_D = calculate_mean_std(D)
+    stats_E = calculate_mean_std(E)
+    
+    datasets = ['A', 'B', 'C', 'D', 'E']
+    means = [stats_A[MEAN], stats_B[MEAN], stats_C[MEAN], stats_D[MEAN], stats_E[MEAN]]
+    std_devs = [stats_A[STD], stats_B[STD], stats_C[STD], stats_D[STD], stats_E[STD]]
+    
+    lower_bounds = [m - s for m, s in zip(means, std_devs)]
+    upper_bounds = [m + s for m, s in zip(means, std_devs)]
+    
+    plt.figure(figsize=(10, 6))
+    
+    x = range(len(datasets))
+    plt.scatter(x, means, s=100, color='blue', label='Середнє значення', zorder=3)
+    plt.axhline(y=50, color='green', linestyle='--', linewidth=2, label='Базова лінія (50)', zorder=1)
+    
+    for i, (m, s) in enumerate(zip(means, std_devs)):
+        plt.annotate(f'{m:.2f}±{s:.2f}', (i, m), 
+                     xytext=(0, 10), textcoords='offset points',
+                     ha='center', va='bottom', fontsize=14)
+    
+    max_y = max(upper_bounds) + 1
+    min_y = min(lower_bounds) - 1
+    plt.ylim(min_y, max_y)
+    
+    plt.xlabel('Набір даних')
+    plt.ylabel('Значення')
+    plt.title('Порівняння середніх значень та стандартних відхилень')
+    plt.xticks(x, datasets)
+    plt.grid(True, linestyle='--', alpha=0.7)
+    
+    from matplotlib.lines import Line2D
+    custom_lines = [
+        Line2D([0], [0], marker='o', color='blue', markersize=8, linestyle='None'),
+        Line2D([0], [0], color='red', linewidth=2),
+        Line2D([0], [0], color='green', linestyle='--', linewidth=2)
+    ]
+    plt.legend(custom_lines, ['Середнє значення', 'Діапазон ст. відхилення', 'Базова лінія (50)'])
+    
+    plt.savefig('dataset_comparison_scatter.png')
+    plt.close()
+    
+    print("Графік збережено як 'dataset_comparison_scatter.png'")
 
-
-
-n = len(x)
-selected_sum = 0
-for freq, var in zip(discrete_row_data[ABS_FREQUENCY], discrete_row_data[VARIANTS]):
-    selected_sum += freq * var
-selected_average = selected_sum / n
-
-
-sum_for_dispertion = 0
-for freq, var in zip(discrete_row_data[ABS_FREQUENCY], discrete_row_data[VARIANTS]):
-    sum_for_dispertion += var ** 2 * freq
-
-
-dispertion = sum_for_dispertion / n - selected_average ** 2
-
-mean_std = sqrt(dispertion)
-variation_coefficient = mean_std / selected_average * 100
-
-print(f"""
-    Середнє вибіркове: {selected_average:3.1f}
-    Дисперсія: {dispertion:3.1f}
-    Середнє квадратичне відхилення: {mean_std:3.1f}
-    Коофіцієнт варіації: {variation_coefficient:3.1f} % 
-""")
-
+plot_mean_std_comparison_scatter()
